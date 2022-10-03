@@ -13,6 +13,7 @@ def view_image(im, figsize=(10, 10)):
     :param figsize: (float, float) taille de l'image affichée
     :return:
     """
+    plt.figure(figsize=figsize)
     plt.imshow(im, 'Greys_r')
     plt.axis('off')
     plt.show()
@@ -172,3 +173,40 @@ def cut_words(line, s=0.98):
                 start = i
                 end = i
                 init = True
+
+
+def colors_generator():
+    """
+    Génère un cycle de couleurs
+    :return: generator
+    """
+    color_bank = [(251, 180, 174, 140),
+                  (179, 205, 227, 140),
+                  (204, 235, 197, 140),
+                  (222, 203, 228, 140),
+                  (254, 217, 166, 140),
+                  (255, 255, 204, 140),
+                  (229, 216, 189, 140),
+                  (253, 218, 236, 140)]
+    n = 0
+    while True:
+        yield color_bank[n % 8]
+        n += 1
+
+
+def color_segmentation(image):
+    """
+
+    :param image: 2D array
+    :return: PIL.Image.Image
+    """
+    res = PIL.Image.fromarray(image).convert('RGBA')  # passage en couleur avec transparence
+    mask = PIL.Image.new('RGBA', res.size, color=(255, 255, 255, 0))
+    draw = PIL.ImageDraw.Draw(mask)
+    colors = colors_generator()
+    for u, v in cut_lines(image):
+        for k, l in cut_words(image[u:v]):
+            draw.rectangle(((k, u), (l, v)), fill=next(iter(colors)))
+
+    res.alpha_composite(mask)
+    return res
