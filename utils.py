@@ -37,7 +37,7 @@ def rotation_PIL(im, theta):
 
     :return: PIL.Image.Image
     """
-    return im.rotate(theta * 180 / np.pi, resample=PIL.Image.BICUBIC)
+    return im.rotate(theta * 180 / np.pi, resample=PIL.Image.BICUBIC, fillcolor=255)
 
 
 def crop(im, size):
@@ -102,23 +102,32 @@ def find_brightest_pixels(image, N):
     return x_idx, y_idx
 
 
-def find_skew_angle(im):
-    IM = np.fft.fftshift(np.fft.fft2(im))
+def find_skew_angle(a, pixel_used=30):
+    """
+    Trouve l'angle de rotation de l'image en fittant une droite sur les points les plus lumineux
+    de la transformée de fourier
+    :param a: 2D array
+    :param pixel_used: int nombre de pixels utilisés pour fitter la droite
+    :return:
+    """
+    A = np.fft.fftshift(np.fft.fft2(a))
     coef = []
-    for quad in quadrants(np.log(np.abs(IM) + 1) * middle_square(IM.shape, 20)):
-        X, y = find_brightest_pixels(quad, 30)
+    for quad in quadrants(np.log(np.abs(A) + 1) * middle_square(A.shape, 20)):
+        X, y = find_brightest_pixels(quad, pixel_used)
         reg = LinearRegression().fit(X.reshape(-1, 1), y)
         R2 = reg.score(X.reshape(-1, 1), y)
         if R2 > 0.8:
             coef.append(reg.coef_)
     if len(coef) == 0:
         warnings.warn("Peu de confiance en l'angle de rotation")
-        for quad in quadrants(np.log(np.abs(IM) + 1) * middle_square(IM.shape, 20)):
-            X, y = find_brightest_pixels(quad, 30)
+        for quad in quadrants(np.log(np.abs(A) + 1) * middle_square(A.shape, 20)):
+            X, y = find_brightest_pixels(quad, pixel_used)
             reg = LinearRegression().fit(X.reshape(-1, 1), y)
             coef.append(reg.coef_)
 
-    return np.arctan(np.mean(coef))
+    correct = A.shape[1] / A.shape[0]  # distortion de l'angle si l'image n'est pas carrée
+
+    return np.arctan(np.mean(coef) * correct)
 
 
 def cut_lines(im, s=0.95):
@@ -194,19 +203,41 @@ def colors_generator():
         n += 1
 
 
-def color_segmentation(image):
+def segmentation(image, crop_image=False, crop_size=None, unskew=True):
+    """
+    Effectue la segmentation de l'image et renvoie une nouvelle image entourant les mots
+    dans des rectangles de différentes couleurs
+
+    :param image: PIL.Image.Image
+    :param crop_image: bool s'il faut découper l'image
+    :param crop_size: tuple dimension du découpage
+    :param unskew: bool s'il faut renvoyer une image remise droite
+    :return:
     """
 
-    :param image: 2D array
-    :return: PIL.Image.Image
-    """
-    res = PIL.Image.fromarray(image).convert('RGBA')  # passage en couleur avec transparence
+    if crop_image:
+        if isinstance(crop_size, tuple):
+            img = crop(image, crop_size)
+        else:
+            raise ValueError("Il faut indiquer une taille de découpage")
+    else:
+        img = image.copy()
+
+    theta = find_skew_angle(np.array(img))
+
+    img2 = rotation_PIL(img, -theta)
+    matrix2 = np.array(img2)
+
+    res = img2.convert('RGBA')  # passage en couleur avec transparence
     mask = PIL.Image.new('RGBA', res.size, color=(255, 255, 255, 0))
     draw = PIL.ImageDraw.Draw(mask)
     colors = colors_generator()
-    for u, v in cut_lines(image):
-        for k, l in cut_words(image[u:v]):
+    for u, v in cut_lines(matrix2):
+        for k, l in cut_words(matrix2[u:v]):
             draw.rectangle(((k, u), (l, v)), fill=next(iter(colors)))
 
     res.alpha_composite(mask)
-    return res
+    if unskew:
+        return res
+    else:
+        return rotation_PIL(res, theta)
