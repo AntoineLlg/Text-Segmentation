@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import PIL
+from PIL import ImageDraw
 from sklearn.linear_model import LinearRegression
 import warnings
 
@@ -127,7 +128,7 @@ def find_skew_angle(a, pixel_used=30):
 
     correct = A.shape[1] / A.shape[0]  # distortion de l'angle si l'image n'est pas carrée
 
-    return np.arctan(np.mean(coef) * correct)
+    return np.arctan(np.mean(coef) / correct)
 
 
 def cut_lines(im, s=0.95):
@@ -230,7 +231,7 @@ def segmentation(image, crop_image=False, crop_size=None, unskew=True):
 
     res = img2.convert('RGBA')  # passage en couleur avec transparence
     mask = PIL.Image.new('RGBA', res.size, color=(255, 255, 255, 0))
-    draw = PIL.ImageDraw.Draw(mask)
+    draw = ImageDraw.Draw(mask)
     colors = colors_generator()
     for u, v in cut_lines(matrix2):
         for k, l in cut_words(matrix2[u:v]):
