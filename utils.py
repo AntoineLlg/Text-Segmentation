@@ -30,17 +30,6 @@ def imread(file_name):
     return img
 
 
-def rotation_PIL(im, theta):
-    """
-    Effectue la rotation de theta radiants de l'image en prenant le centre de l'image comme centre de rotation
-    :param im: PIL.Image.Image image
-    :param theta: float angle de rotation en radiants
-
-    :return: PIL.Image.Image
-    """
-    return im.rotate(theta * 180 / np.pi, resample=PIL.Image.BICUBIC, fillcolor=255)
-
-
 def crop(im, size):
     """
     découpe un carré ou rectangle au centre de l'image, de dimension(s) size. Si size est un entier, il est utilisé
@@ -103,7 +92,7 @@ def find_brightest_pixels(image, N):
     return x_idx, y_idx
 
 
-def find_skew_angle(a, pixel_used=30):
+def find_skew_angle_bad(a, pixel_used=30):
     """
     Trouve l'angle de rotation de l'image en fittant une droite sur les points les plus lumineux
     de la transformée de fourier
@@ -113,7 +102,7 @@ def find_skew_angle(a, pixel_used=30):
     """
     A = np.fft.fftshift(np.fft.fft2(a))
     coef = []
-    for quad in quadrants(np.log(np.abs(A) + 1) * middle_square(A.shape, 20)):
+    for quad in quadrants(np.log(np.abs(A) + 1) * middle_square(A.shape, 10)):
         X, y = find_brightest_pixels(quad, pixel_used)
         reg = LinearRegression().fit(X.reshape(-1, 1), y)
         R2 = reg.score(X.reshape(-1, 1), y)
@@ -121,7 +110,7 @@ def find_skew_angle(a, pixel_used=30):
             coef.append(reg.coef_)
     if len(coef) == 0:
         warnings.warn("Peu de confiance en l'angle de rotation")
-        for quad in quadrants(np.log(np.abs(A) + 1) * middle_square(A.shape, 20)):
+        for quad in quadrants(np.log(np.abs(A) + 1) * middle_square(A.shape, 5)):
             X, y = find_brightest_pixels(quad, pixel_used)
             reg = LinearRegression().fit(X.reshape(-1, 1), y)
             coef.append(reg.coef_)
@@ -129,60 +118,6 @@ def find_skew_angle(a, pixel_used=30):
     correct = A.shape[1] / A.shape[0]  # distortion de l'angle si l'image n'est pas carrée
 
     return np.arctan(np.mean(coef) / correct)
-
-
-def cut_lines(im, s=0.95):
-    """
-    Crée un générateur qui renvoie dans l'ordre les indice de départ et fin des lignes de texte dans l'image.
-
-    :param im: 2D array
-    :param s: float dans (0, 1) le seuil en dessous duquel on considère qu'il y a de l'écriture dans la ligne
-    :return: generator
-    """
-    white_density = im.sum(axis=-1)
-    threshold = s * white_density.max()
-
-    text_line = white_density < threshold
-    init = False
-    for i in range(len(white_density)):
-        if init:
-            if text_line[i]:
-                end = i
-            else:
-                init = False
-                yield start, end + 1
-        else:
-            if text_line[i]:
-                start = i
-                end = i
-                init = True
-
-
-def cut_words(line, s=0.98):
-    """
-    Crée un générateur qui renvoie dans l'ordre les indice de départ et fin des mots de texte dans la ligne.
-
-    :param line: 2D array
-    :param s: float dans (0, 1) le seuil en dessous duquel on considère qu'il y a de l'écriture dans la ligne
-    :return: generator
-    """
-    white_density = line.sum(axis=0)
-    threshold = s * white_density.max()
-
-    text_line = white_density < threshold
-    init = False
-    for i in range(len(white_density)):
-        if init:
-            if text_line[i]:
-                end = i
-            else:
-                init = False
-                yield start, end + 1
-        else:
-            if text_line[i]:
-                start = i
-                end = i
-                init = True
 
 
 def colors_generator():
@@ -242,3 +177,56 @@ def segmentation(image, crop_image=False, crop_size=None, unskew=True):
         return res
     else:
         return rotation_PIL(res, theta)
+
+
+def histogram(im):
+    nl, nc = im.shape
+
+    hist = np.zeros(256)
+
+    for i in range(nl):
+        for j in range(nc):
+            hist[im[i][j]] = hist[im[i][j]] + 1
+
+    for i in range(256):
+        hist[i] = hist[i] / (nc * nl)
+
+    return hist
+
+
+def otsu(im):
+    h = histogram(im)
+
+    m = 0
+    for i in range(256):
+        m = m + i * h[i]
+
+    maxt = 0
+    maxk = 0
+
+    for t in range(256):
+        w0 = 0
+        w1 = 0
+        m0 = 0
+        m1 = 0
+        for i in range(t):
+            w0 = w0 + h[i]
+            m0 = m0 + i * h[i]
+        if w0 > 0:
+            m0 = m0 / w0
+
+        for i in range(t, 256):
+            w1 = w1 + h[i]
+            m1 = m1 + i * h[i]
+        if w1 > 0:
+            m1 = m1 / w1
+
+        k = w0 * w1 * (m0 - m1) * (m0 - m1)
+
+        if k > maxk:
+            maxk = k
+            maxt = t
+
+    thresh = maxt
+
+    return ((im > thresh) * 255).astype(np.uint8)
