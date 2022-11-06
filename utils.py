@@ -4,6 +4,9 @@ import PIL
 from PIL import ImageDraw
 from sklearn.linear_model import LinearRegression
 import warnings
+import turn
+import analysis
+from PIL.ImageFilter import GaussianBlur
 
 
 def view_image(im, figsize=(10, 10)):
@@ -92,7 +95,7 @@ def find_brightest_pixels(image, N):
     return x_idx, y_idx
 
 
-def find_skew_angle_bad(a, pixel_used=30):
+def find_skew_angle_quadrants(a, pixel_used=30):
     """
     Trouve l'angle de rotation de l'image en fittant une droite sur les points les plus lumineux
     de la transformée de fourier
@@ -139,44 +142,32 @@ def colors_generator():
         n += 1
 
 
-def segmentation(image, crop_image=False, crop_size=None, unskew=True):
+def segmentation(image, r=1):
     """
     Effectue la segmentation de l'image et renvoie une nouvelle image entourant les mots
     dans des rectangles de différentes couleurs
 
+    :param r: rayon du noyau gaussien utilisé pour segmenter les mots
     :param image: PIL.Image.Image
-    :param crop_image: bool s'il faut découper l'image
-    :param crop_size: tuple dimension du découpage
-    :param unskew: bool s'il faut renvoyer une image remise droite
     :return:
     """
+    numpy_image = np.array(image)
 
-    if crop_image:
-        if isinstance(crop_size, tuple):
-            img = crop(image, crop_size)
-        else:
-            raise ValueError("Il faut indiquer une taille de découpage")
-    else:
-        img = image.copy()
+    binary = otsu(numpy_image)
+    binary_PIL = PIL.Image.fromarray(binary)
 
-    theta = find_skew_angle(np.array(img))
+    blurred = np.array(binary_PIL.filter(GaussianBlur(radius=r)))
 
-    img2 = rotation_PIL(img, -theta)
-    matrix2 = np.array(img2)
-
-    res = img2.convert('RGBA')  # passage en couleur avec transparence
+    """res = image.copy().convert('RGBA')
     mask = PIL.Image.new('RGBA', res.size, color=(255, 255, 255, 0))
-    draw = ImageDraw.Draw(mask)
-    colors = colors_generator()
-    for u, v in cut_lines(matrix2):
-        for k, l in cut_words(matrix2[u:v]):
-            draw.rectangle(((k, u), (l, v)), fill=next(iter(colors)))
+    draw = PIL.ImageDraw.Draw(mask)
+    colors = colors_generator()"""
 
-    res.alpha_composite(mask)
-    if unskew:
-        return res
-    else:
-        return rotation_PIL(res, theta)
+    for u, v in analysis.cut_lines(binary_PIL):
+        for k, l in analysis.cut_words(blurred[u:v]):
+            yield u, k, v, l
+    """res.alpha_composite(mask)"""
+
 
 
 def histogram(im):
@@ -230,3 +221,7 @@ def otsu(im):
     thresh = maxt
 
     return ((im > thresh) * 255).astype(np.uint8)
+
+
+def ostu_local(im):
+    return

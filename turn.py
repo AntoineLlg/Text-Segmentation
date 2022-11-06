@@ -1,9 +1,11 @@
 import numpy as np
 from tqdm import tqdm
 import PIL.Image
+import utils
+from sklearn.linear_model import LinearRegression
 
 
-def mask_orientation(theta, shape, eps=np.pi / 32):
+def mask_orientation(theta, shape, eps=np.pi/32):
     """
     creates a mask in a cone around the direction theta
     """
@@ -13,7 +15,7 @@ def mask_orientation(theta, shape, eps=np.pi / 32):
 
     complexes = y - 1j * x
     angles = np.angle(complexes)
-
+    angles += 2*np.pi * (angles + np.pi < eps)
     mask = (angles > theta - eps) * (angles < theta + eps) * (np.abs(complexes) > .25)
     return mask
 
@@ -27,8 +29,20 @@ def fft_shifted_abs(im):
     return np.abs(np.fft.fftshift(np.fft.fft2(im)))
 
 
-def find_skew_angle(im, n_theta=100):
-    thetas = np.linspace(-5 * np.pi / 8, 5 * np.pi / 8, n_theta)
+def find_skew_angle_lin(im):
+    TF = fft_shifted_abs(im)
+    N, M = im.shape
+    TF *= utils.middle_square(TF.shape, N//16, M//16)  # ajout d'un carré de 0 au milieu de la TF
+    X, y = utils.find_brightest_pixels(TF, TF.size//10000)
+
+    reg = LinearRegression(fit_intercept=False).fit(X.reshape(-1, 1) / M.shape[0], y / M.shape[1])
+    theta = np.arctan(reg.coef_)
+
+    return theta
+
+
+def find_skew_angle_masks(im, n_theta=100):
+    thetas = np.linspace(-np.pi/32, 33*np.pi/32, n_theta)
 
     L = []
     for theta in tqdm(thetas, desc='Looking for the angle'):
@@ -39,6 +53,7 @@ def find_skew_angle(im, n_theta=100):
     vois_theta = thetas[max(0, max_index - 2):min(max_index + 3, n_theta)]  # voisinage de theta
     weights = L[max(0, max_index - 2):min(max_index + 3, n_theta)]
     return np.average(vois_theta, weights=weights)
+
 
 def rotation_PIL(im, theta):
     """

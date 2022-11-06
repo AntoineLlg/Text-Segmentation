@@ -10,7 +10,7 @@ def hist(dens):
     """transforme la densité de blancs en un histogramme en vue de trouver un seuil de segmentation optimal"""
 
 
-def cut_lines(im, s=0.95):
+def cut_lines(im):
     """
     Crée un générateur qui renvoie dans l'ordre les indice de départ et fin des lignes de texte dans l'image.
 
@@ -19,9 +19,8 @@ def cut_lines(im, s=0.95):
     :return: generator
     """
     white_density = im.sum(axis=-1)
-    threshold = s * white_density.max()
 
-    text_line = white_density < threshold
+    text_line = white_density < 0.95 * white_density.max()
     init = False
     for i in range(len(white_density)):
         if init:
@@ -29,7 +28,7 @@ def cut_lines(im, s=0.95):
                 end = i
             else:
                 init = False
-                yield im[start: end + 1]
+                yield start, end + 1
         else:
             if text_line[i]:
                 start = i
@@ -37,16 +36,16 @@ def cut_lines(im, s=0.95):
                 init = True
 
 
-def cut_words(line, s=0.98):
+def cut_words(line):
     """
     Crée un générateur qui renvoie dans l'ordre les indice de départ et fin des mots de texte dans la ligne.
 
     :param line: 2D array
-    :param s: float dans (0, 1) le seuil en dessous duquel on considère qu'il y a de l'écriture dans la ligne
     :return: generator
     """
     white_density = line.sum(axis=0)
-    threshold = s * white_density.max()
+
+    threshold = 0.98 * white_density.max()
 
     text_line = white_density < threshold
     init = False
@@ -56,9 +55,11 @@ def cut_words(line, s=0.98):
                 end = i
             else:
                 init = False
-                yield line[:, start: end + 1]
+                yield start, end + 1
         else:
             if text_line[i]:
                 start = i
                 end = i
                 init = True
+    if init:
+        yield start, end + 1

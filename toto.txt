@@ -1,0 +1,24 @@
+tester de photos, perspective, images bombées
+séparer les images d'une vidéo, traiter individuellement et assembler pour stabiliser les images
+blanchir les images
+rotation sans couper
+
+chercher les cas ou ça ne marche pas, limites en terme de perspective, bombage etc, espacement
+
+
+
+travailler uniquement sur des bouts d'image
+
+arreter les quadrants, pas d'intercept dans la droite
+sklearn.linear_model.SGDregressor loss Huber (un peu comme une loss L1 mais avec quadratique vers 0)
+
+
+si image trop verticale, la retourner
+
+
+si on arrive pas sur image totale, la decouper, trouver plusieur theta et obtenir une transformation lisse de l'image on verra apres comment on recolle les morceaux
+
+
+faire une bande droite d'angle theta (pour theta en 0et 180°), maximiser la variance dans la TF ?
+
+masque, multiplication puis calcul de variance
