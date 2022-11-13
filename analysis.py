@@ -10,7 +10,7 @@ def hist(dens):
     """transforme la densité de blancs en un histogramme en vue de trouver un seuil de segmentation optimal"""
 
 
-def cut_lines(im):
+def cut_lines(im, sl=0.95):
     """
     Crée un générateur qui renvoie dans l'ordre les indice de départ et fin des lignes de texte dans l'image.
 
@@ -20,7 +20,7 @@ def cut_lines(im):
     """
     white_density = im.sum(axis=-1)
 
-    text_line = white_density < 0.95 * white_density.max()
+    text_line = white_density < sl * white_density.max()
     init = False
     for i in range(len(white_density)):
         if init:
@@ -36,7 +36,7 @@ def cut_lines(im):
                 init = True
 
 
-def cut_words(line):
+def cut_words(line, sw=0.98):
     """
     Crée un générateur qui renvoie dans l'ordre les indice de départ et fin des mots de texte dans la ligne.
 
@@ -45,7 +45,7 @@ def cut_words(line):
     """
     white_density = line.sum(axis=0)
 
-    threshold = 0.98 * white_density.max()
+    threshold = sw * white_density.max()
 
     text_line = white_density < threshold
     init = False
