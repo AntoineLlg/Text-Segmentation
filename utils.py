@@ -142,11 +142,13 @@ def colors_generator():
         n += 1
 
 
-def segmentation(image, r=1):
+def segmentation(image, r=1, sl=0.95, sw=0.98):
     """
     Effectue la segmentation de l'image et renvoie une nouvelle image entourant les mots
     dans des rectangles de différentes couleurs
 
+    :param sw: seuil de segmentation des mots
+    :param sl: seuil de segmentation des lignes
     :param r: rayon du noyau gaussien utilisé pour segmenter les mots
     :param image: PIL.Image.Image
     :return:
@@ -158,15 +160,20 @@ def segmentation(image, r=1):
 
     blurred = np.array(binary_PIL.filter(GaussianBlur(radius=r)))
 
-    """res = image.copy().convert('RGBA')
+    res = image.copy().convert('RGBA')
     mask = PIL.Image.new('RGBA', res.size, color=(255, 255, 255, 0))
     draw = PIL.ImageDraw.Draw(mask)
-    colors = colors_generator()"""
+    colors = colors_generator()
 
-    for u, v in analysis.cut_lines(binary_PIL):
-        for k, l in analysis.cut_words(blurred[u:v]):
-            yield u, k, v, l
-    """res.alpha_composite(mask)"""
+    n, m = binary.shape
+
+    for u, v in analysis.cut_lines(binary, sl):
+        for k, l in analysis.cut_words(blurred[u:v], sw):
+            #  yield u, k, v, l
+            if u > 0 and v < n and k > 0 and l < m:
+                draw.rectangle(((k, u), (l, v)), fill=next(iter(colors)))
+    res.alpha_composite(mask)
+    return res
 
 
 
