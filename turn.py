@@ -30,15 +30,15 @@ def fft_shifted_abs(im):
 
 
 def find_skew_angle_lin(im):
-    TF = fft_shifted_abs(im)
-    N, M = im.shape
-    TF *= utils.middle_square(TF.shape, N//16, M//16)  # ajout d'un carré de 0 au milieu de la TF
-    X, y = utils.find_brightest_pixels(TF, TF.size//10000)
+    numpy_image = np.asarray(im)
+    TF = np.log(np.abs(np.fft.fftshift(np.fft.fft2(numpy_image))))
+    n, m = TF.shape
+    X, y = utils.find_brightest_pixels(TF * utils.middle_square(TF.shape, n // 16, m // 16), 20)
 
-    reg = LinearRegression(fit_intercept=False).fit(X.reshape(-1, 1) / M.shape[0], y / M.shape[1])
-    theta = np.arctan(reg.coef_)
+    reg = LinearRegression().fit(X.reshape(-1, 1) / TF.shape[0], y / TF.shape[1])
 
-    return theta
+    alpha = np.arctan(reg.coef_)
+    return alpha
 
 
 def find_skew_angle_masks(im, n_theta=100):

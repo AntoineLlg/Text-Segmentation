@@ -169,7 +169,6 @@ def segmentation(image, r=1, sl=0.95, sw=0.98):
 
     for u, v in analysis.cut_lines(binary, sl):
         for k, l in analysis.cut_words(blurred[u:v], sw):
-            #  yield u, k, v, l
             if u > 0 and v < n and k > 0 and l < m:
                 draw.rectangle(((k, u), (l, v)), fill=next(iter(colors)))
     res.alpha_composite(mask)

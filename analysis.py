@@ -1,4 +1,8 @@
 import numpy as np
+import PIL
+from PIL.ImageFilter import GaussianBlur
+import utils
+import turn
 
 
 def density(im, axis=-1):
@@ -63,3 +67,70 @@ def cut_words(line, sw=0.98):
                 init = True
     if init:
         yield start, end + 1
+
+
+def regular_cuts(image: PIL.Image.Image):
+    n, m = image.size
+    for i in range(7):
+        for j in range(7):
+            yield image.crop((j*n//9, i*m//9, j*n//9 + n//3, i*m//9 + m//3))
+
+
+def segmentation_mask(image, r=1, sl=0.95, sw=0.98):
+    """
+    Effectue la segmentation de l'image et renvoie une nouvelle image correspondant
+    à des rectangles encadrant les mots segmentés
+
+    :param sw: seuil de segmentation des mots
+    :param sl: seuil de segmentation des lignes
+    :param r: rayon du noyau gaussien utilisé pour segmenter les mots
+    :param image: PIL.Image.Image
+    :return:
+    """
+    numpy_image = np.array(image)
+
+    binary = utils.otsu(numpy_image)
+    binary_PIL = PIL.Image.fromarray(binary)
+
+    blurred = np.array(binary_PIL.filter(GaussianBlur(radius=r)))
+
+    mask = PIL.Image.new('L', image.size, color=0)
+    draw = PIL.ImageDraw.Draw(mask)
+
+    n, m = binary.shape
+
+    for u, v in cut_lines(binary, sl):
+        for k, l in cut_words(blurred[u:v], sw):
+            if u > 0 and v < n and k > 0 and l < m:
+                draw.rectangle(((k, u), (l, v)), fill=255)
+
+    return mask
+
+
+def segmentation_coordinates(image, r=1, sl=0.95, sw=0.98):
+    """
+    Effectue la segmentation de l'image et renvoie une nouvelle image correspondant
+    à des rectangles encadrant les mots segmentés
+
+    :param sw: seuil de segmentation des mots
+    :param sl: seuil de segmentation des lignes
+    :param r: rayon du noyau gaussien utilisé pour segmenter les mots
+    :param image: PIL.Image.Image
+    :return:
+    """
+    numpy_image = np.array(image)
+
+    binary = utils.otsu(numpy_image)
+    binary_PIL = PIL.Image.fromarray(binary)
+
+    blurred = np.array(binary_PIL.filter(GaussianBlur(radius=r)))
+
+    mask = PIL.Image.new('L', image.size, color=0)
+    draw = PIL.ImageDraw.Draw(mask)
+
+    n, m = binary.shape
+
+    for u, v in cut_lines(binary, sl):
+        for k, l in cut_words(blurred[u:v], sw):
+            if u > 0 and v < n and k > 0 and l < m:
+                yield (k, u), (l, v)
