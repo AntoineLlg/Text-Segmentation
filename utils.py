@@ -8,6 +8,11 @@ import turn
 import analysis
 from PIL.ImageFilter import GaussianBlur
 
+from skimage.transform import hough_line, hough_line_peaks
+from skimage.feature import canny
+from scipy.stats import mode
+from skimage.filters import threshold_local
+
 
 def view_image(im, figsize=(10, 10)):
     """
@@ -229,5 +234,149 @@ def otsu(im):
     return ((im > thresh) * 255).astype(np.uint8)
 
 
-def ostu_local(im):
-    return
+def find_skew_angle_quadrants(a, pixel_used=30):
+    """
+    Trouve l'angle de rotation de l'image en fittant une droite sur les points les plus lumineux
+    de la transformée de fourier
+    :param a: 2D array
+    :param pixel_used: int nombre de pixels utilisés pour fitter la droite
+    :return:
+    """
+    A = np.fft.fftshift(np.fft.fft2(a))
+    coef = []
+    for quad in quadrants(np.log(np.abs(A) + 1) * middle_square(A.shape, 10)):
+        X, y = find_brightest_pixels(quad, pixel_used)
+        reg = LinearRegression().fit(X.reshape(-1, 1), y)
+        R2 = reg.score(X.reshape(-1, 1), y)
+        if R2 > 0.8:
+            coef.append(reg.coef_)
+    if len(coef) == 0:
+        warnings.warn("Peu de confiance en l'angle de rotation")
+        for quad in quadrants(np.log(np.abs(A) + 1) * middle_square(A.shape, 5)):
+            X, y = find_brightest_pixels(quad, pixel_used)
+            reg = LinearRegression().fit(X.reshape(-1, 1), y)
+            coef.append(reg.coef_)
+
+    correct = A.shape[1] / A.shape[0]  # distortion de l'angle si l'image n'est pas carrée
+
+    return np.arctan(np.mean(coef) / correct)
+
+def find_skew_angle_no_quadrants(a, pixel_used=30 , square = 10):
+    """
+    Trouve l'angle de rotation de l'image en fittant une droite sur les points les plus lumineux
+    de la transformée de fourier, sans utiliser la méthode des quadrants
+    :param a: 2D array
+    :param pixel_used: int nombre de pixels utilisés pour fitter la droite
+    :return:
+    """
+    A = np.fft.fftshift(np.fft.fft2(a))
+    coef = 0
+    X, y = find_brightest_pixels(np.log(np.abs(A) + 1) * middle_square(A.shape, square), pixel_used)
+    reg = LinearRegression().fit(X.reshape(-1, 1), y)
+    R2 = reg.score(X.reshape(-1, 1), y)
+    if R2 > 0.8:
+        coef = reg.coef_
+    if coef == 0:
+        warnings.warn("Peu de confiance en l'angle de rotation")
+        X, y = find_brightest_pixels(np.log(np.abs(A) + 1) * middle_square(A.shape, square), pixel_used)
+        reg = LinearRegression().fit(X.reshape(-1, 1), y)
+        coef = reg.coef_
+
+    correct = A.shape[1] / A.shape[0]  # distortion de l'angle si l'image n'est pas carrée
+
+    return np.arctan(coef / correct)
+
+def find_skew_angle_hough(im, plot = False):
+    edges = canny(im)
+    angles = np.deg2rad(np.arange(0.1, 180.0)) #radians
+    h, theta, d = hough_line(edges, theta=angles)
+    accum, angles, dists = hough_line_peaks(h, theta, d)
+
+    #to plot the lines on the image
+    if plot:
+        fig, axes = plt.subplots(1, 2, figsize=(15, 16))
+        ax = axes.ravel()
+        ax[0].imshow(im, cmap="gray")
+        ax[0].set_title('Image')
+        ax[0].set_axis_off()
+        ax[1].imshow(edges, cmap="gray")
+        origin = np.array((0, im.shape[1]))
+        for _, angle, dist in zip(*hough_line_peaks(h, theta, d)):
+            y0, y1 = (dist - origin * np.cos(angle)) / np.sin(angle)
+            ax[1].plot(origin, (y0, y1), '-r')
+        ax[1].set_xlim(origin)
+        ax[1].set_ylim((edges.shape[0], 0))
+        ax[1].set_axis_off()
+        ax[1].set_title('Lignes de Hough')
+
+    return mode(np.around(angles, decimals=2))[0]
+
+
+def find_skew_angle(im, method = 'fourier', pixel_used = 30, square = 10, plot = False ):
+    """
+    Trouve l'angle de rotation de l'image du texte
+
+    :param im: l'image pré-traitée
+    :param method: la méthode à utiliser : fourier, quadrants, hough
+    :param pixel_used: pour les méthodes utilisant fourier
+    :param square: pour les méthodes utilisant fourier
+    :param plot: pour tracer les lignes de Hough
+    :return: angle
+    """
+    if method == 'fourier':
+        out = find_skew_angle_no_quadrants(im, pixel_used, square)
+    elif method == 'quadrants':
+        out = find_skew_angle_quadrants(im, pixel_used)
+    elif method == 'hough':
+        out = find_skew_angle_hough(im, plot)
+    return out
+
+def ostu_local(im, size = 9, offset=0):
+    local_thresh = threshold_local(im, size, offset)
+    out = im > local_thresh
+    return out
+
+
+def median_filter(im, typ=1, r=1, xy=None):
+    """
+    renvoie le median de l'image im.
+    si typ==1 (defaut) le median est calcule sur un carre de cote 2r+1
+    si typ==2 : disque de rayon r
+    si typ==3 alors xy est un couple de liste de x et liste de y
+         ([-1,0,1] , [0,0,0]) donne un median sur un segment horizontql de taille trois.
+    """
+    lx = []
+    ly = []
+    (ty, tx) = im.shape
+    if typ == 1:  # carre
+
+        for k in range(-r, r + 1):
+            for l in range(-r, r + 1):
+                lx.append(k)
+                ly.append(l)
+
+    elif typ == 2:
+        for k in range(-r, r + 1):
+            for l in range(-r, r + 1):
+                if k ** 2 + l ** 2 <= r ** 2:
+                    lx.append(k)
+                    ly.append(l)
+    else:  #freeshape
+        lx, ly = xy
+
+    debx = -min(lx)  # min is supposed negatif
+    deby = -min(ly)
+    finx = tx - max(lx)  # max is supposed positif
+    finy = ty - max(ly)
+    ttx = finx - debx
+    tty = finy - deby
+    tab = np.zeros((len(lx), ttx * tty))
+    # print (lx,ly)
+    # print(ttx,tty)
+    # print(im[deby+ly[k]:tty+ly[k]+deby,debx+lx[k]:debx+ttx+lx[k]].reshape(-1).shape)
+    for k in range(len(lx)):
+        tab[k, :] = im[deby + ly[k]:deby + tty + ly[k], debx + lx[k]:debx + ttx + lx[k]].reshape(-1)
+    out = im.copy()
+    out[deby:finy, debx:finx] = np.median(tab, axis=0).reshape((tty, ttx))
+    return out
+
