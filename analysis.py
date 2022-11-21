@@ -118,8 +118,6 @@ def segmentation_coordinates(image, r=1, sl=0.95, sw=0.98):
     numpy_image = np.array(image)
 
     blurred = np.array(image.filter(GaussianBlur(radius=r)))
-
-
     n, m = numpy_image.shape
 
     for u, v in cut_lines(numpy_image, sl):
