@@ -160,19 +160,16 @@ def segmentation(image, r=1, sl=0.95, sw=0.98):
     """
     numpy_image = np.array(image)
 
-    binary = otsu(numpy_image)
-    binary_PIL = PIL.Image.fromarray(binary)
-
-    blurred = np.array(binary_PIL.filter(GaussianBlur(radius=r)))
+    blurred = np.array(image.filter(GaussianBlur(radius=r)))
 
     res = image.copy().convert('RGBA')
     mask = PIL.Image.new('RGBA', res.size, color=(255, 255, 255, 0))
     draw = PIL.ImageDraw.Draw(mask)
     colors = colors_generator()
 
-    n, m = binary.shape
+    n, m = numpy_image.shape
 
-    for u, v in analysis.cut_lines(binary, sl):
+    for u, v in analysis.cut_lines(numpy_image, sl):
         for k, l in analysis.cut_words(blurred[u:v], sw):
             if u > 0 and v < n and k > 0 and l < m:
                 draw.rectangle(((k, u), (l, v)), fill=next(iter(colors)))
@@ -261,6 +258,7 @@ def find_skew_angle_quadrants(a, pixel_used=30):
 
     return np.arctan(np.mean(coef) / correct)
 
+
 def find_skew_angle_no_quadrants(a, pixel_used=30 , square = 10):
     """
     Trouve l'angle de rotation de l'image en fittant une droite sur les points les plus lumineux
@@ -285,6 +283,7 @@ def find_skew_angle_no_quadrants(a, pixel_used=30 , square = 10):
     correct = A.shape[1] / A.shape[0]  # distortion de l'angle si l'image n'est pas carrée
 
     return np.arctan(coef / correct)
+
 
 def find_skew_angle_hough(im, plot = False):
     edges = canny(im)
@@ -331,9 +330,10 @@ def find_skew_angle(im, method = 'fourier', pixel_used = 30, square = 10, plot =
         out = find_skew_angle_hough(im, plot)
     return out
 
-def ostu_local(im, size = 9, offset=0):
-    local_thresh = threshold_local(im, size, offset)
-    out = im > local_thresh
+
+def otsu_local(im, size=9, offset=0):
+    local_thresh = threshold_local(im, size, offset=offset)
+    out = (im > local_thresh)
     return out
 
 
@@ -380,3 +380,9 @@ def median_filter(im, typ=1, r=1, xy=None):
     out[deby:finy, debx:finx] = np.median(tab, axis=0).reshape((tty, ttx))
     return out
 
+
+def preprocessing(image: PIL.Image.Image, size=9, offset=10):
+    numpy_image = np.array(image.convert('L'))
+    med = median_filter(numpy_image)
+    binary = otsu_local(med, size=size, offset=offset)
+    return PIL.Image.fromarray(binary).convert('L')

@@ -89,17 +89,14 @@ def segmentation_mask(image, r=1, sl=0.95, sw=0.98):
     """
     numpy_image = np.array(image)
 
-    binary = utils.otsu(numpy_image)
-    binary_PIL = PIL.Image.fromarray(binary)
-
-    blurred = np.array(binary_PIL.filter(GaussianBlur(radius=r)))
+    blurred = np.array(image.filter(GaussianBlur(radius=r)))
 
     mask = PIL.Image.new('L', image.size, color=0)
     draw = PIL.ImageDraw.Draw(mask)
 
-    n, m = binary.shape
+    n, m = numpy_image.shape
 
-    for u, v in cut_lines(binary, sl):
+    for u, v in cut_lines(numpy_image, sl):
         for k, l in cut_words(blurred[u:v], sw):
             if u > 0 and v < n and k > 0 and l < m:
                 draw.rectangle(((k, u), (l, v)), fill=255)
@@ -120,17 +117,12 @@ def segmentation_coordinates(image, r=1, sl=0.95, sw=0.98):
     """
     numpy_image = np.array(image)
 
-    binary = utils.otsu(numpy_image)
-    binary_PIL = PIL.Image.fromarray(binary)
+    blurred = np.array(image.filter(GaussianBlur(radius=r)))
 
-    blurred = np.array(binary_PIL.filter(GaussianBlur(radius=r)))
 
-    mask = PIL.Image.new('L', image.size, color=0)
-    draw = PIL.ImageDraw.Draw(mask)
+    n, m = numpy_image.shape
 
-    n, m = binary.shape
-
-    for u, v in cut_lines(binary, sl):
+    for u, v in cut_lines(numpy_image, sl):
         for k, l in cut_words(blurred[u:v], sw):
             if u > 0 and v < n and k > 0 and l < m:
                 yield (k, u), (l, v)
